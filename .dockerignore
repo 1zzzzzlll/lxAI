@@ -1,0 +1,11 @@
+.git
+.env
+.runtime-smoke*
+.venv*
+.pytest_cache
+**/__pycache__
+**/*.pyc
+dist
+images
+data
+models

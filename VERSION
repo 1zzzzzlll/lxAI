@@ -1,0 +1,11 @@
+offline-ai-platform=1.0.0
+open-webui=0.9.5
+agent-core=1.0.0
+office-worker=1.0.0
+tool-runner=1.0.0
+nginx=1.28.0
+postgres=17.10
+qdrant=1.18.2
+python=3.12
+node=22
+embedding=BAAI/bge-small-zh-v1.5

@@ -1,0 +1,13 @@
+.env
+config/deployment.env
+.pytest_cache/
+.venv*/
+.runtime-smoke*/
+__pycache__/
+*.pyc
+images/*.tar
+dist/
+backup/
+data/
+docs/hardware-report.md
+docs/acceptance-report.generated.md

@@ -1,0 +1,228 @@
+name: offline-ai
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks:
+    - offline-ai-net
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  logging:
+    driver: json-file
+    options:
+      max-size: 20m
+      max-file: "5"
+
+services:
+  nginx:
+    <<: *service-defaults
+    image: nginx:1.28.0-bookworm
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    depends_on:
+      open-webui:
+        condition: service_healthy
+      agent-core:
+        condition: service_healthy
+    ports:
+      - target: 8080
+        published: "${WEB_PORT:-8088}"
+        host_ip: "${WEB_BIND_ADDRESS:-0.0.0.0}"
+        protocol: tcp
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=64m
+      - /var/run:size=8m
+      - /tmp:size=32m
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${DATA_ROOT:-/TRS/lxAI}/files:/srv/artifacts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/healthz >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  open-webui:
+    <<: *service-defaults
+    image: ghcr.io/open-webui/open-webui:v0.9.5
+    expose:
+      - "8080"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      OFFLINE_MODE: "true"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      DO_NOT_TRACK: "true"
+      SCARF_NO_ANALYTICS: "true"
+      ANONYMIZED_TELEMETRY: "false"
+      ENABLE_VERSION_UPDATE_CHECK: "false"
+      ENABLE_WEB_SEARCH: "false"
+      ENABLE_SIGNUP: "false"
+      RAG_EMBEDDING_MODEL_AUTO_UPDATE: "false"
+      RAG_RERANKING_MODEL_AUTO_UPDATE: "false"
+      WHISPER_MODEL_AUTO_UPDATE: "false"
+      DEFAULT_LOCALE: zh-CN
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY}
+      WEBUI_ADMIN_EMAIL: ${ADMIN_EMAIL}
+      WEBUI_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      WEBUI_ADMIN_NAME: Offline AI Admin
+      OPENAI_API_BASE_URL: http://agent-core:8000/v1
+      OPENAI_API_KEY: ${AGENT_SHARED_SECRET}
+      RAG_EMBEDDING_ENGINE: ""
+      RAG_EMBEDDING_MODEL: /models/embedding
+      SENTENCE_TRANSFORMERS_HOME: /models
+      VECTOR_DB: qdrant
+      QDRANT_URI: http://qdrant:6333
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      agent-core:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    volumes:
+      - ${DATA_ROOT:-/TRS/lxAI}/open-webui:/app/backend/data
+      - ./models/embedding:/models/embedding:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+
+  agent-core:
+    <<: *service-defaults
+    image: offline-ai/agent-core:1.0.0-${IMAGE_ARCH:-arm64}
+    build:
+      context: .
+      dockerfile: docker/agent-core/Dockerfile
+    expose:
+      - "8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      MODEL_BASE_URL: ${MODEL_BASE_URL}
+      MODEL_NAME: ${MODEL_NAME}
+      MODEL_API_KEY: ${MODEL_API_KEY-}
+      AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-10}
+      TOOL_TIMEOUT: ${TOOL_TIMEOUT:-120}
+      TOOL_RUNNER_URL: http://tool-runner:8000
+      OFFICE_WORKER_URL: http://office-worker:8000
+      AGENT_SHARED_SECRET: ${AGENT_SHARED_SECRET}
+    depends_on:
+      tool-runner:
+        condition: service_healthy
+      office-worker:
+        condition: service_healthy
+    read_only: true
+    pids_limit: ${AGENT_PIDS_LIMIT:-256}
+    mem_limit: ${AGENT_MEMORY:-4g}
+    cpus: ${AGENT_CPUS:-2.0}
+    tmpfs:
+      - /tmp:size=128m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  tool-runner:
+    <<: *service-defaults
+    image: offline-ai/tool-runner:1.0.0-${IMAGE_ARCH:-arm64}
+    build:
+      context: .
+      dockerfile: docker/tool-runner/Dockerfile
+    expose:
+      - "8000"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      SAFE_MODE: ${SAFE_MODE:-true}
+      ALLOW_DANGEROUS_TOOLS: ${ALLOW_DANGEROUS_TOOLS:-false}
+      DB_WRITE_ENABLED: ${DB_WRITE_ENABLED:-false}
+      HTTP_ALLOW_PRIVATE_ONLY: ${HTTP_ALLOW_PRIVATE_ONLY:-true}
+      TOOL_TIMEOUT: ${TOOL_TIMEOUT:-120}
+      WORKSPACE_ROOT: /workspace
+      SSH_ROOT: /secrets/ssh
+      KUBECONFIG: /secrets/kubeconfig
+      AGENT_SHARED_SECRET: ${AGENT_SHARED_SECRET}
+    volumes:
+      - ${DATA_ROOT:-/TRS/lxAI}/files:/workspace
+      - ${DATA_ROOT:-/TRS/lxAI}/secrets/ssh:/secrets/ssh:ro
+      - ${DATA_ROOT:-/TRS/lxAI}/secrets/kubeconfig:/secrets/kubeconfig:ro
+    pids_limit: ${TOOL_PIDS_LIMIT:-256}
+    mem_limit: ${TOOL_MEMORY:-4g}
+    cpus: ${TOOL_CPUS:-2.0}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  office-worker:
+    <<: *service-defaults
+    image: offline-ai/office-worker:1.0.0-${IMAGE_ARCH:-arm64}
+    build:
+      context: .
+      dockerfile: docker/office-worker/Dockerfile
+    expose:
+      - "8000"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      WORKSPACE_ROOT: /workspace
+      TEMPLATE_ROOT: /templates
+      AGENT_SHARED_SECRET: ${AGENT_SHARED_SECRET}
+    volumes:
+      - ${DATA_ROOT:-/TRS/lxAI}/files:/workspace
+      - ${DATA_ROOT:-/TRS/lxAI}/templates:/templates:ro
+    pids_limit: ${OFFICE_PIDS_LIMIT:-256}
+    mem_limit: ${OFFICE_MEMORY:-4g}
+    cpus: ${OFFICE_CPUS:-2.0}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null"]
+      interval: 20s
+      timeout: 10s
+      retries: 12
+
+  postgres:
+    <<: *service-defaults
+    image: postgres:17.10-bookworm
+    # The official entrypoint must chown/chmod a fresh bind-mounted PGDATA.
+    cap_drop: []
+    expose:
+      - "5432"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ${DATA_ROOT:-/TRS/lxAI}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  qdrant:
+    <<: *service-defaults
+    image: qdrant/qdrant:v1.18.2
+    expose:
+      - "6333"
+    volumes:
+      - ${DATA_ROOT:-/TRS/lxAI}/qdrant:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+networks:
+  offline-ai-net:
+    name: offline-ai-net
+    driver: bridge
