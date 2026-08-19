@@ -18,6 +18,9 @@ Configuration:
   --model-api-key KEY           Optional model API key
   --model-auto-detect BOOL      Enable read-only model API discovery
   --data-root PATH              Persistent data root
+  --docker-auto-install BOOL    Install missing Docker/Compose from this bundle
+  --docker-data-root PATH       Data root for a newly installed Docker Engine
+  --host-tools-install-dir PATH Install bundled host tools such as jq here
   --timezone TZ                 Container timezone
   --admin-email EMAIL           Initial administrator email
   --admin-password PASSWORD     Initial administrator password
@@ -57,6 +60,9 @@ while (($#)); do
     --model-api-key) set_cli MODEL_API_KEY "${2-}"; shift 2 ;;
     --model-auto-detect) set_cli MODEL_AUTO_DETECT "${2-}"; shift 2 ;;
     --data-root) set_cli DATA_ROOT "${2-}"; shift 2 ;;
+    --docker-auto-install) set_cli DOCKER_AUTO_INSTALL "${2-}"; shift 2 ;;
+    --docker-data-root) set_cli DOCKER_DATA_ROOT "${2-}"; shift 2 ;;
+    --host-tools-install-dir) set_cli HOST_TOOLS_INSTALL_DIR "${2-}"; shift 2 ;;
     --timezone) set_cli TZ "${2-}"; shift 2 ;;
     --admin-email) set_cli ADMIN_EMAIL "${2-}"; shift 2 ;;
     --admin-password) set_cli ADMIN_PASSWORD "${2-}"; shift 2 ;;
@@ -111,6 +117,14 @@ if (( EUID != 0 )); then
 fi
 
 validate_data_root
+HOST_TOOLS_INSTALL_DIR=${HOST_TOOLS_INSTALL_DIR:-/usr/local/bin}
+DOCKER_DATA_ROOT=${DOCKER_DATA_ROOT:-$DATA_ROOT/docker-engine}
+DOCKER_INSTALL_DIR=${DOCKER_INSTALL_DIR:-/usr/local/bin}
+PATH="$HOST_TOOLS_INSTALL_DIR:$DOCKER_INSTALL_DIR:$PATH"
+export HOST_TOOLS_INSTALL_DIR DOCKER_DATA_ROOT DOCKER_INSTALL_DIR PATH
+validate_docker_data_root
+"$PROJECT_DIR/scripts/ensure-host-tools.sh"
+"$PROJECT_DIR/scripts/ensure-docker.sh"
 "$PROJECT_DIR/scripts/precheck.sh"
 if [[ ! -f "$ENV_FILE" || "$configuration_requested" == true || "$reconfigure" == true ]]; then
   "$PROJECT_DIR/scripts/generate-env.sh"

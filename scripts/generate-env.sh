@@ -13,12 +13,18 @@ WEB_BIND_ADDRESS=${WEB_BIND_ADDRESS:-0.0.0.0}
 WEB_PORT=${WEB_PORT:-8088}
 WEB_PORT_CONFLICT_POLICY=${WEB_PORT_CONFLICT_POLICY:-next}
 DATA_ROOT=${DATA_ROOT:-/TRS/lxAI}
+DOCKER_AUTO_INSTALL=${DOCKER_AUTO_INSTALL:-true}
+DOCKER_DATA_ROOT=${DOCKER_DATA_ROOT:-$DATA_ROOT/docker-engine}
+HOST_TOOLS_INSTALL_DIR=${HOST_TOOLS_INSTALL_DIR:-/usr/local/bin}
 IMAGE_ARCH=$(target_arch)
 
 validate_bool MODEL_AUTO_DETECT "$MODEL_AUTO_DETECT"
+validate_bool DOCKER_AUTO_INSTALL "$DOCKER_AUTO_INSTALL"
 validate_web_bind_address
 validate_uint WEB_PORT "$WEB_PORT" 1 65535
 validate_data_root
+validate_docker_data_root
+[[ "$HOST_TOOLS_INSTALL_DIR" == /* && "$HOST_TOOLS_INSTALL_DIR" != / ]] || die "HOST_TOOLS_INSTALL_DIR must be a non-root absolute path; got: ${HOST_TOOLS_INSTALL_DIR:-<empty>}"
 case "$WEB_PORT_CONFLICT_POLICY" in next|fail) ;; *) die "WEB_PORT_CONFLICT_POLICY must be next or fail; got: $WEB_PORT_CONFLICT_POLICY" ;; esac
 
 if [[ "$MODEL_AUTO_DETECT" == true ]]; then
@@ -75,7 +81,7 @@ env_quote() {
   [[ "$value" != *"'"* ]] || die "configuration values cannot contain a single quote: $value"
   printf "'%s'" "$value"
 }
-for value in "$MODEL_BASE_URL" "$MODEL_NAME" "$MODEL_API_KEY" "$DATA_ROOT" "${POSTGRES_DB:-offline_ai}" "${POSTGRES_USER:-offline_ai}" "$postgres_password" "$webui_secret" "${ADMIN_EMAIL:-admin@offline.local}" "$admin_password" "$shared_secret" "${EMBEDDING_MODEL_PATH:-/models/embedding}" "${TZ:-Asia/Shanghai}"; do
+for value in "$MODEL_BASE_URL" "$MODEL_NAME" "$MODEL_API_KEY" "$DATA_ROOT" "$DOCKER_DATA_ROOT" "$HOST_TOOLS_INSTALL_DIR" "${POSTGRES_DB:-offline_ai}" "${POSTGRES_USER:-offline_ai}" "$postgres_password" "$webui_secret" "${ADMIN_EMAIL:-admin@offline.local}" "$admin_password" "$shared_secret" "${EMBEDDING_MODEL_PATH:-/models/embedding}" "${TZ:-Asia/Shanghai}"; do
   [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || die 'configuration values cannot contain newlines'
   [[ "$value" != *"'"* ]] || die "configuration values cannot contain a single quote: $value"
 done
@@ -87,6 +93,9 @@ WEB_BIND_ADDRESS=$WEB_BIND_ADDRESS
 WEB_PORT=$port
 WEB_PORT_CONFLICT_POLICY=$WEB_PORT_CONFLICT_POLICY
 DATA_ROOT=$(env_quote "$DATA_ROOT")
+DOCKER_AUTO_INSTALL=$DOCKER_AUTO_INSTALL
+DOCKER_DATA_ROOT=$(env_quote "$DOCKER_DATA_ROOT")
+HOST_TOOLS_INSTALL_DIR=$(env_quote "$HOST_TOOLS_INSTALL_DIR")
 MODEL_BASE_URL=$(env_quote "$MODEL_BASE_URL")
 MODEL_NAME=$(env_quote "$MODEL_NAME")
 MODEL_API_KEY=$(env_quote "$MODEL_API_KEY")

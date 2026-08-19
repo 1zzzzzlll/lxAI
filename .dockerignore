@@ -9,3 +9,6 @@ dist
 images
 data
 models
+runtime/docker/docker-*.tgz
+runtime/docker/docker-compose-linux-*
+runtime/docker/checksums.sha256

@@ -9,5 +9,9 @@ images/*.tar
 dist/
 backup/
 data/
+.cache/
+runtime/docker/docker-*.tgz
+runtime/docker/docker-compose-linux-*
+runtime/docker/checksums.sha256
 docs/hardware-report.md
 docs/acceptance-report.generated.md

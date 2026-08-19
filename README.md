@@ -1,6 +1,6 @@
 # ARM64 / x86_64 完全离线 AI Agent 综合办公平台
 
-本项目交付固定版本的 `linux/arm64` 与 `linux/amd64` 两套离线部署包。目标服务器只需已安装 Docker 与 Docker Compose；部署阶段不会执行 `docker pull`、`pip install`、`npm install`、`apt update` 或访问公网。已有模型服务只作为 OpenAI Compatible API 使用，平台不会停止、升级或修改模型 Runtime。
+本项目交付固定版本的 `linux/arm64` 与 `linux/amd64` 两套离线部署包。部署脚本会先检测 Docker Engine、守护进程和 Compose：已有健康环境直接复用；服务未启动时尝试启动原服务；仅缺 Compose 时安装包内插件；完全缺失时从包内校验过的官方静态二进制安装 Docker 并注册开机服务。服务器没有 `jq` 时，也会从包内校验后自动安装。全过程不会执行 `docker pull`、`pip install`、`npm install`、`apt update` 或访问公网。已有模型服务只作为 OpenAI Compatible API 使用，平台不会停止、升级或修改模型 Runtime。
 
 ## 三步部署
 
@@ -20,7 +20,7 @@ sudo ./deploy.sh
 
 每个包内的 `TARGET_ARCH` 会锁定目标架构，部署前同时核对主机和全部镜像架构，不能交叉部署。
 
-部署脚本会校验 SHA256 和镜像架构、校验模型配置、生成强随机密码、检测 Web 端口冲突、导入镜像、启动服务，并执行 Agent、Python、Node、DOCX、XLSX、PPTX、PDF 烟雾测试。
+部署脚本会校验 Docker 安装资产和镜像的 SHA256、校验主机与镜像架构、校验模型配置、生成强随机密码、检测 Web 端口冲突、导入镜像、启动服务，并执行 Agent、Python、Node、DOCX、XLSX、PPTX、PDF 烟雾测试。
 
 推荐先复制完整配置模板；`config/deployment.env` 存在时，`deploy.sh` 会自动读取：
 
@@ -39,7 +39,9 @@ sudo ./deploy.sh \
   --port-conflict next \
   --model-url http://127.0.0.1:6215/v1/chat/completions \
   --model-name TT3.6-27B-0623 \
-  --data-root /TRS/lxAI
+  --data-root /TRS/lxAI \
+  --docker-auto-install true \
+  --docker-data-root /TRS/lxAI/docker-engine
 ```
 
 `WEB_PORT_CONFLICT_POLICY=next` 会从指定端口向上寻找空闲端口；设为 `fail` 时发现冲突立即停止。再次修改配置后运行 `sudo ./deploy.sh --reconfigure`，已有随机密钥会被保留。
@@ -63,12 +65,15 @@ TARGET_ARCH=amd64 ./prepare-offline-bundle.sh
 
 脚本会：
 
-1. 预下载 `BAAI/bge-small-zh-v1.5` 到本地模型目录；
-2. 使用 Buildx 构建三个目标架构自定义镜像；已存在且架构正确的同版本镜像会复用，设置 `FORCE_REBUILD=1` 可强制重建；
-3. 拉取固定版本的目标架构官方镜像；
-4. 对每个镜像执行带平台参数的 `docker image inspect` 并强制验证 Architecture；
-5. 使用带平台参数的 `docker save` 导出全部镜像并生成 `checksums.sha256`；
-6. 分别输出 `dist/offline-ai-arm64-v1.0.0.tar.zst` 或 `dist/offline-ai-x86_64-v1.0.0.tar.zst` 及其 SHA256。
+1. 从 Docker 官方静态下载站、Docker Compose 与 jq 官方 Release 下载固定版本的目标架构安装资产，并核对仓库锁定的 SHA256；
+2. 预下载 `BAAI/bge-small-zh-v1.5` 到本地模型目录；
+3. 使用 Buildx 构建三个目标架构自定义镜像；已存在且架构正确的同版本镜像会复用，设置 `FORCE_REBUILD=1` 可强制重建；
+4. 拉取固定版本的目标架构官方镜像；
+5. 对每个镜像执行带平台参数的 `docker image inspect` 并强制验证 Architecture；
+6. 使用带平台参数的 `docker save` 导出全部镜像并生成 `checksums.sha256`；
+7. 分别输出 `dist/offline-ai-arm64-v1.0.0.tar.zst` 或 `dist/offline-ai-x86_64-v1.0.0.tar.zst` 及其 SHA256。
+
+`DOCKER_AUTO_INSTALL=true` 为默认值。新装 Docker 的数据默认位于 `${DATA_ROOT}/docker-engine`；可通过配置文件或 `--docker-data-root` 改为其他专用绝对路径。脚本不会替换一套已经存在的 Docker Engine；若现有 Engine 损坏且无法启动，会保留现场并停止，避免破坏服务器上其他容器。
 
 构建机架构可以与目标架构不同，但跨架构构建必须已启用 Buildx/QEMU；目标服务器不会使用 QEMU。
 

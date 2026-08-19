@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# chkconfig: 2345 95 05
+# description: Docker Application Container Engine (offline-ai bundled runtime)
+set -u
+
+dockerd='@DOCKERD@'
+data_root='@DATA_ROOT@'
+pid_file=/run/offline-ai-dockerd.pid
+log_file=/var/log/offline-ai-docker/dockerd.log
+
+is_running() { [[ -s "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2>/dev/null; }
+case "${1:-}" in
+  start)
+    is_running && exit 0
+    mkdir -p /run /var/log/offline-ai-docker "$data_root"
+    nohup "$dockerd" --host=unix:///var/run/docker.sock --data-root="$data_root" >>"$log_file" 2>&1 &
+    echo $! > "$pid_file"
+    ;;
+  stop)
+    if is_running; then kill "$(cat "$pid_file")"; fi
+    rm -f "$pid_file"
+    ;;
+  restart) "$0" stop; "$0" start ;;
+  status) is_running ;;
+  *) echo "Usage: $0 {start|stop|restart|status}" >&2; exit 2 ;;
+esac

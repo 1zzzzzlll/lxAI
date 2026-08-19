@@ -6,11 +6,11 @@ expected_arch=$(target_arch)
 detected_arch=$(host_arch)
 [[ "$detected_arch" == "$expected_arch" ]] || die "$expected_arch package requires a $expected_arch server; detected $(uname -m)"
 pass "Architecture: $(uname -m) ($detected_arch)"
-command -v docker >/dev/null || die 'Docker is not installed'
-docker info >/dev/null 2>&1 || die 'Docker daemon is unavailable'
+command -v docker >/dev/null || die 'Docker is unavailable after environment preparation'
+docker info >/dev/null 2>&1 || die 'Docker daemon is unavailable after environment preparation'
 pass 'Docker daemon'
-if docker compose version >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1; then pass 'Docker Compose'; else die 'Docker Compose is missing'; fi
-for command in bash curl jq openssl tar zstd sha256sum awk sed grep ss readlink; do command -v "$command" >/dev/null || die "$command is required"; done
+if docker compose version >/dev/null 2>&1; then pass 'Docker Compose v2'; else die 'Docker Compose v2 is missing'; fi
+for command in bash curl jq openssl tar zstd sha256sum awk sed grep ss readlink; do command -v "$command" >/dev/null || die "$command is unavailable after environment preparation"; done
 pass 'Host deployment commands'
 
 disk_check_path=${DATA_ROOT:-$PROJECT_DIR}
