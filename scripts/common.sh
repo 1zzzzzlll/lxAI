@@ -51,6 +51,10 @@ load_env() {
   # shellcheck disable=SC1090
   source "$ENV_FILE"
   set +a
+  if [[ -n "${HOST_TOOLS_INSTALL_DIR:-}" ]]; then
+    PATH="$HOST_TOOLS_INSTALL_DIR:$PATH"
+    export PATH
+  fi
 }
 
 validate_bool() {
@@ -138,4 +142,23 @@ validate_data_root() {
   [[ "$candidate" =~ ^/[^/]+/[^/]+ ]] || die "DATA_ROOT must contain at least two path components; got: $candidate"
   DATA_ROOT=$candidate
   export DATA_ROOT
+}
+
+validate_docker_data_root() {
+  local candidate=${DOCKER_DATA_ROOT:-}
+  [[ -n "$candidate" && "$candidate" == /* ]] || die "DOCKER_DATA_ROOT must be a non-empty absolute path; got: ${candidate:-<empty>}"
+  if command -v readlink >/dev/null 2>&1; then candidate=$(readlink -m -- "$candidate"); fi
+  candidate=${candidate%/}
+  [[ -n "$candidate" && "$candidate" != / ]] || die 'DOCKER_DATA_ROOT cannot be /'
+  case "$candidate" in
+    /bin|/boot|/dev|/etc|/home|/lib|/lib64|/opt|/proc|/root|/run|/sbin|/srv|/sys|/tmp|/usr|/var)
+      die "DOCKER_DATA_ROOT cannot be a system root: $candidate"
+      ;;
+    /bin/*|/boot/*|/dev/*|/etc/*|/lib/*|/lib64/*|/proc/*|/root/*|/run/*|/sbin/*|/sys/*|/usr/*)
+      die "DOCKER_DATA_ROOT cannot be inside a protected system path: $candidate"
+      ;;
+  esac
+  [[ "$candidate" =~ ^/[^/]+/[^/]+ ]] || die "DOCKER_DATA_ROOT must contain at least two path components; got: $candidate"
+  DOCKER_DATA_ROOT=$candidate
+  export DOCKER_DATA_ROOT
 }

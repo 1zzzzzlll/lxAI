@@ -24,6 +24,9 @@ WEB_BIND_ADDRESS=127.0.0.1 \
 WEB_PORT=39201 \
 WEB_PORT_CONFLICT_POLICY=next \
 DATA_ROOT=/srv/lxai-test \
+DOCKER_AUTO_INSTALL=true \
+DOCKER_DATA_ROOT=/srv/lxai-test/docker-engine \
+HOST_TOOLS_INSTALL_DIR=/opt/lxai/bin \
 IMAGE_ARCH=amd64 \
 MODEL_BASE_URL=http://127.0.0.1:6215/v1/chat/completions \
 MODEL_NAME=Custom-27B \
@@ -34,6 +37,9 @@ grep -Fx 'WEB_BIND_ADDRESS=127.0.0.1' "$test_root/.env"
 grep -Fx 'WEB_PORT=39202' "$test_root/.env"
 grep -Fx 'IMAGE_ARCH=amd64' "$test_root/.env"
 grep -Fx "DATA_ROOT='/srv/lxai-test'" "$test_root/.env"
+grep -Fx 'DOCKER_AUTO_INSTALL=true' "$test_root/.env"
+grep -Fx "DOCKER_DATA_ROOT='/srv/lxai-test/docker-engine'" "$test_root/.env"
+grep -Fx "HOST_TOOLS_INSTALL_DIR='/opt/lxai/bin'" "$test_root/.env"
 grep -Fx "MODEL_BASE_URL='http://host.docker.internal:6215/v1'" "$test_root/.env"
 grep -Fx "MODEL_NAME='Custom-27B'" "$test_root/.env"
 
@@ -55,6 +61,7 @@ source "$PROJECT_DIR/scripts/common.sh"
 DATA_ROOT=/data/lxai-test validate_data_root
 if (DATA_ROOT=/ validate_data_root >/dev/null 2>&1); then exit 41; fi
 if (DATA_ROOT=/etc/lxai validate_data_root >/dev/null 2>&1); then exit 42; fi
+if (DOCKER_DATA_ROOT=/ validate_docker_data_root >/dev/null 2>&1); then exit 45; fi
 if (WEB_BIND_ADDRESS=999.1.1.1 validate_web_bind_address >/dev/null 2>&1); then exit 43; fi
 
 echo 'CONFIG TESTS PASSED'
